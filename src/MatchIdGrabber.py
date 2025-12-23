@@ -6,7 +6,7 @@
 import time
 import requests
 import os
-from Config import api_key
+from src.Config import api_key
 
 DataBase = "Data/Raw"
 outPath = os.path.join(DataBase,"MatchIDs.txt")
