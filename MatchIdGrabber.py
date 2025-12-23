@@ -1,0 +1,63 @@
+#Take a small sample of players ~2
+#set upper limit on Id's
+#grab their most recent match
+#grab the ids of every player from that game 
+#Loop and clean the Id's already grabbed
+import time
+import requests
+import os
+from Config import api_key
+
+DataBase = "Data/Raw"
+outPath = os.path.join(DataBase,"MatchIDs.txt")
+Header = {"X-Riot-Token": api_key}
+
+def getMatchIds(puuid: str, start: int = 0, count: int = 100):
+    api_url = f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids"
+    response = requests.get(api_url, headers = Header, params = {"start":start, "count":count}, timeout = 20)
+
+    if response.status_code == 429:
+        retry_after = int(response.headers.get("Retry-After", "2"))
+        time.sleep(retry_after)
+        return getMatchIds(puuid, start, count)
+    
+    response.raise_for_status()
+    return response.json()
+
+def puuidSeeds(path: str) -> set[str]:
+    if not os.path.exists(path):
+        return set()
+    with open(path, "r", encoding="utf-8") as f:
+        return set(line.strip() for line in f if line.strip())
+    
+def appendNewIds(path: str, new_ids: list[str]):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'a', encoding='utf-8') as f:
+        for matchid in new_ids:
+            f.write(matchid + "\n")
+
+def main():
+    if not api_key:
+        raise RuntimeError("missing api key")
+    seed_puuids = [
+        "ZDeF5_l5PcdFrBAGZJc3FXH_rMVej7iZ_snsQl6yIZPuBZOPy2JTELg9fTtspAHE7tJzS5wy7460rQ",
+        "MQXYnF9l3o09tQMyvCjN0v_PrKbFcu7uihOCC6_QaGF1njmoXqG4FxvxSn4ezDTgVS2BnWNUmQspdw"
+    ]
+    matchIds = puuidSeeds(outPath)
+    print(f'Loaded {len(matchIds)} existing IDs')
+
+    addedTotal = 0
+    for puuid in seed_puuids:
+        ids = getMatchIds(puuid, start=0, count=100)
+        new = [mid for mid in ids if mid not in matchIds]
+
+        if new:
+            appendNewIds(outPath, new)
+            matchIds.update(new)
+            addedTotal += len(new)
+        time.sleep(0.1)
+
+    print(f'Added {addedTotal}. total queued: {len(matchIds)}')
+
+if __name__ == "__main__":
+    main()
