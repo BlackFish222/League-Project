@@ -88,7 +88,9 @@ def main():
 
     seed_puuids = [
         "ZDeF5_l5PcdFrBAGZJc3FXH_rMVej7iZ_snsQl6yIZPuBZOPy2JTELg9fTtspAHE7tJzS5wy7460rQ",
-        "MQXYnF9l3o09tQMyvCjN0v_PrKbFcu7uihOCC6_QaGF1njmoXqG4FxvxSn4ezDTgVS2BnWNUmQspdw"
+        "MQXYnF9l3o09tQMyvCjN0v_PrKbFcu7uihOCC6_QaGF1njmoXqG4FxvxSn4ezDTgVS2BnWNUmQspdw",
+        "hYfvdISfgd1KIwX6EZXM4h6vvKEG-gOb7p8a4GNn5dnR6UhrG1KcVcnYVfNKIcF9tZiZ-iepgiTldg",
+        "86L4pE0sAUM7g_9siCXOL4utfK_Y2HKpHnl8Q2k0TkDlAAs3fiC-sB-NuMwSo5OxI7uU4DLla8URCQ"
     ]
 
     conn = connect_db(DB_PATH)

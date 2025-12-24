@@ -1,9 +1,12 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()  # reads .env into environment variables
+load_dotenv()
 
 api_key = os.getenv("RIOT_API_KEY")
 
-if api_key is None:
-    raise RuntimeError("RIOT_API_KEY not found. Check your .env file.")
+if not api_key:
+    raise RuntimeError(f"RIOT_API_KEY not found." )
+
+print(api_key)
