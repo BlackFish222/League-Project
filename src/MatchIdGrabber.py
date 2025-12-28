@@ -41,9 +41,15 @@ def main():
         raise RuntimeError("missing api key")
     seed_puuids = [
         "ZDeF5_l5PcdFrBAGZJc3FXH_rMVej7iZ_snsQl6yIZPuBZOPy2JTELg9fTtspAHE7tJzS5wy7460rQ",
-        "MQXYnF9l3o09tQMyvCjN0v_PrKbFcu7uihOCC6_QaGF1njmoXqG4FxvxSn4ezDTgVS2BnWNUmQspdw"
-        "hYfvdISfgd1KIwX6EZXM4h6vvKEG-gOb7p8a4GNn5dnR6UhrG1KcVcnYVfNKIcF9tZiZ-iepgiTldg"
-        "86L4pE0sAUM7g_9siCXOL4utfK_Y2HKpHnl8Q2k0TkDlAAs3fiC-sB-NuMwSo5OxI7uU4DLla8URCQ"
+        "MQXYnF9l3o09tQMyvCjN0v_PrKbFcu7uihOCC6_QaGF1njmoXqG4FxvxSn4ezDTgVS2BnWNUmQspdw",
+        "hYfvdISfgd1KIwX6EZXM4h6vvKEG-gOb7p8a4GNn5dnR6UhrG1KcVcnYVfNKIcF9tZiZ-iepgiTldg",
+        "86L4pE0sAUM7g_9siCXOL4utfK_Y2HKpHnl8Q2k0TkDlAAs3fiC-sB-NuMwSo5OxI7uU4DLla8URCQ",
+        "APpfP4las_yrmU8DAy1Gp878ITIk1VUzTqgORnHgtYRe9q12dLqXw1kbRgn8bwlAMwqg5hGycfNs1Q",
+        "s18-zSEvvrFuXzkvSptrjjpeQV7y5BPtq2vpt7b---jl8O67lPMiVjCEpUZwiILK15m6lI7YAENBiw",
+        "MQuzRDeGH3UpCdiCgG9HDq2hFSvP3S9H_0pn48sxBYZrQm2ntVTVpXM6lOLtqIoUTOa7YQMmGXlwpQ",
+        "CC6srW-i03Q2CMlRkZ2P1e3T-GJV3oglXJAxnSRB438lQb9q26ipWjaCSnblAbp4uDPV7-KPQU8Egw",
+        "J6KXeXfpdDQJE5KWZXp8W1VdS1fqybMJyUp15XmUma1N-BxDhy-3LCdgsgdTCbX2gqPmj4fCxDpKfg",
+        "d9el1JZDXpI47SfRzwvJ_TSghao8ToiVkCkhrhOGK-6I43T3FbqjhJyuuBWzFKX62gohMBgXEPdsew",
     ]
     matchIds = puuidSeeds(outPath)
     print(f'Loaded {len(matchIds)} existing IDs')

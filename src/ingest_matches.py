@@ -130,4 +130,4 @@ def main(limit: int | None = None) -> None:
     print(f"Process Finished: inserted = {inserted}, skipped = {skipped}, failed = {failed}")
 
 if __name__ == "__main__":
-    main(limit=500)
+    main(limit=15000)
