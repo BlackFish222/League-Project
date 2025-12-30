@@ -12,6 +12,8 @@ PAGE_SIZE = 100
 MAX_PAGES_PER_PUUID = 50
 TARGET_TOTAL = 15000
 SAMPLE_MATCHES = 20
+RANKED_SOLO_QUEUE = 420
+
 
 def getMatchIds(puuid: str, start: int = 0, count: int = 100) -> list[str]:
     api_url = f"https://{REGION}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids"
@@ -24,6 +26,7 @@ def getMatchIds(puuid: str, start: int = 0, count: int = 100) -> list[str]:
 
     r.raise_for_status()
     return r.json()
+
 
 def fetch_match(match_id: str) -> dict:
     """Fetch full match detail JSON for a given match ID."""
@@ -40,12 +43,14 @@ def fetch_match(match_id: str) -> dict:
         r.raise_for_status()
         return r.json()
 
+
 def connect_db(db_path: str) -> sqlite3.Connection:
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     return conn
+
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.execute("""
@@ -64,6 +69,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     """)
     conn.commit()
 
+
 def add_seed_puuids(conn: sqlite3.Connection, puuids: list[str]) -> None:
     conn.executemany(
         "INSERT OR IGNORE INTO puuids(puuid) VALUES(?)",
@@ -71,11 +77,13 @@ def add_seed_puuids(conn: sqlite3.Connection, puuids: list[str]) -> None:
     )
     conn.commit()
 
+
 def get_next_puuid(conn: sqlite3.Connection) -> str | None:
     row = conn.execute(
         "SELECT puuid FROM puuids WHERE fetched=0 ORDER BY updated_at ASC LIMIT 1"
     ).fetchone()
     return row[0] if row else None
+
 
 def mark_puuid_done(conn: sqlite3.Connection, puuid: str) -> None:
     conn.execute(
@@ -84,12 +92,14 @@ def mark_puuid_done(conn: sqlite3.Connection, puuid: str) -> None:
     )
     conn.commit()
 
+
 def mark_puuid_error(conn: sqlite3.Connection, puuid: str, err: str) -> None:
     conn.execute(
         "UPDATE puuids SET last_error=?, updated_at=CURRENT_TIMESTAMP WHERE puuid=?",
         (err[:500], puuid)
     )
     conn.commit()
+
 
 def insert_match_ids(conn: sqlite3.Connection, match_ids: list[str]) -> int:
     conn.executemany(
@@ -99,34 +109,48 @@ def insert_match_ids(conn: sqlite3.Connection, match_ids: list[str]) -> int:
     conn.commit()
     return conn.execute("SELECT changes()").fetchone()[0]
 
+
 def count_match_ids(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COUNT(*) FROM match_ids").fetchone()[0]
 
-def add_puuids(conn: sqlite3.Connection, puuids: list[str])->int:
+
+def add_puuids(conn: sqlite3.Connection, puuids: list[str]) -> int:
     conn.executemany(
         "INSERT OR IGNORE INTO puuids(puuid) VALUES(?)",
         [(p,) for p in puuids]
     )
     conn.commit()
-    return conn.execute ("SELECT changes()").fetchone()[0]
+    return conn.execute("SELECT changes()").fetchone()[0]
 
-def puuid_puller(conn: sqlite3.Connection, match_ids: list[str])->int:
+
+def puuid_puller(conn: sqlite3.Connection, match_ids: list[str]) -> tuple[list[str], int]:
+
+    ranked_ids: list[str] = []
     pulled = 0
     sample_ids = match_ids[:SAMPLE_MATCHES]
 
     for mid in sample_ids:
         try:
             match_json = fetch_match(mid)
-            participants = match_json.get("info", {}).get("participants",[])
+            info = match_json.get("info", {})
+
+            if info.get("queueId") != RANKED_SOLO_QUEUE:
+                continue
+
+            ranked_ids.append(mid)
+
+            participants = info.get("participants", [])
             puuids = [p.get("puuid") for p in participants if p.get("puuid")]
             added = add_puuids(conn, puuids)
             pulled += added
-            if added > 0:
-                print(f"added {added} puuids")
-            time.sleep(.05)
+
+            time.sleep(0.05)
         except Exception as e:
-            print(e)
-    return pulled
+            print(f"error expanding from match {mid}: {e}")
+
+    return ranked_ids, pulled
+
+
 def main():
     if not api_key:
         raise RuntimeError("Missing api key")
@@ -157,29 +181,36 @@ def main():
             break
 
         try:
-            start = 0 
+            start = 0
             pages = 0
             while count_match_ids(conn) < TARGET_TOTAL:
                 ids = getMatchIds(puuid, start=start, count=PAGE_SIZE)
                 if not ids:
                     print("End of match history")
                     break
-                added = insert_match_ids(conn, ids)
-                total = count_match_ids(conn)
-                print(f"total matches = {total}/{TARGET_TOTAL}")
-                #print(f"PUUID {puuid[:8]}… got {len(ids)} ids, added {added}, total={total}")
-                new_puuids = puuid_puller(conn, ids)
-                if new_puuids:
-                    unfetched = conn.execute(
-                        "SELECT COUNT(*) FROM puuids WHERE fetched=0"
-                    ).fetchone()[0]
-                    print(f"new puuids = {new_puuids}")
+
+                ranked_ids, new_puuids = puuid_puller(conn, ids)
+
+                if not ranked_ids:
+                    print("No solo queue matches on this page")
+                else:
+                    added = insert_match_ids(conn, ranked_ids)
+                    total = count_match_ids(conn)
+                    print(f"total ranked matches = {total}/{TARGET_TOTAL}")
+
+                    if new_puuids:
+                        unfetched = conn.execute(
+                            "SELECT COUNT(*) FROM puuids WHERE fetched=0"
+                        ).fetchone()[0]
+                        print(f"new puuids = {new_puuids}, unfetched={unfetched}")
+
                 pages += 1
                 if pages >= MAX_PAGES_PER_PUUID:
-                    print(f"Max pages reached")
+                    print("Max pages reached")
                     break
+
                 start += PAGE_SIZE
-                time.sleep(.01)
+                time.sleep(0.01)
 
             mark_puuid_done(conn, puuid)
 
@@ -197,12 +228,6 @@ def main():
 
     conn.close()
 
+
 if __name__ == "__main__":
     main()
-
-"""import sqlite3
-conn = sqlite3.connect("data/raw/riot_queue.sqlite")
-print("match_ids:", conn.execute("SELECT COUNT(*) FROM match_ids").fetchone()[0])
-print("puuids:", conn.execute("SELECT COUNT(*) FROM puuids").fetchone()[0])
-print("unfetched puuids:", conn.execute("SELECT COUNT(*) FROM puuids WHERE fetched=0").fetchone()[0])
-conn.close()"""

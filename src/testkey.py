@@ -2,7 +2,7 @@
 from Config import api_key
 import requests
 
-print(f"API Key from Config: {api_key}...")
+print(f"API Key from Config: {api_key}")
 
 # Simple test
 url = "https://na1.api.riotgames.com/lol/status/v4/platform-data"
