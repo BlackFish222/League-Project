@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path("data") / "riot.db"
+DEFAULT_DB_PATH = Path("Data") / "riot.db"
 
 def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -70,8 +70,31 @@ def init_db(conn: sqlite3.Connection, schema_path: Path = Path("src/schema.sql")
         CREATE INDEX IF NOT EXISTS idx_participants_puuid ON participants(puuid);
         CREATE INDEX IF NOT EXISTS idx_matches_queue ON matches(queue_id);
         CREATE INDEX IF NOT EXISTS idx_matches_game_start ON matches(game_start_timestamp);
+                           
+        CREATE VIEW IF NOT EXISTS player_match_stats AS
+        SELECT 
+            p.puuid,
+            p.match_id,
+            m.game_creation AS game_creation,
+            m.game_duration / 60.0 AS game_minutes,
+            p.gold_earned / (m.gameDuration / 60.0) AS gold_per_min,
+            CASE 
+                WHEN m.gameDuration = 0 THEN 0.0
+                ELSE p.deaths / (m.gameDuration / 600.0)
+            END AS deaths_per_10,
+            p.kills,
+            p.deaths,
+            p.assists,
+            p.role,
+            p.lane,
+            p.team_id,
+            m.queue_id AS queue_id
+        FROM participants p
+        JOIN matches m ON p.match_id = m.match_id;
         """)
+        
 
 def match_exists(conn: sqlite3.Connection, match_id: str) -> bool:
     row = conn.execute("SELECT 1 FROM matches WHERE match_id = ? LIMIT 1", (match_id,)).fetchone()
     return row is not None
+
