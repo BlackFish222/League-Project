@@ -1,15 +1,32 @@
 import sqlite3
-from pathlib import Path
+import json
+import time
+from typing import Optional
+
 from db import connect, init_db, match_exists
-from riot_api import fetch_match, cache_read, cache_write
+from riot_api import fetch_match
+
+def cache_get_db(conn: sqlite3.Connection, match_id: str) -> dict | None:
+    row = conn.execute(
+        "SELECT json FROM match_cache WHERE match_id = ?",
+        (match_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    # row is sqlite3.Row because db.connect sets row_factory
+    return json.loads(row["json"])
+
+def cache_put_db(conn: sqlite3.Connection, match_id: str, match_json: dict) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO match_cache (match_id, json) VALUES (?, ?)",
+        (match_id, json.dumps(match_json))
+    )
 
 
-MATCH_CACHE_DIR = Path("Data/Cache/Matches")
-MATCH_IDS_PATH = Path("Data/Raw/match_ids.txt")
-
-def insert_match(conn: sqlite3.Connection, match_id: str, match_json: dict)-> None:
+def insert_match(conn: sqlite3.Connection, match_id: str, match_json: dict) -> None:
     info = match_json.get("info", {})
-    meta = match_json.get("metadata", {})
+    meta = match_json.get("metadata", {})  # not used yet, but fine
+
     conn.execute("""
       INSERT INTO matches (
         match_id, game_creation, game_duration, game_end_timestamp,
@@ -71,32 +88,30 @@ def insert_match(conn: sqlite3.Connection, match_id: str, match_json: dict)-> No
           p.get("lane"),
         ))
 
-def load_match_ids(path: Path)-> list[str]:
-    raw = path.read_text(encoding = "utf-8").splitlines()
-    return [line.strip() for line in raw if line.strip()]
+def main(limit: Optional[int] = None) -> None:
+    conn = connect()
+    init_db(conn)
 
-def load_match_ids_from_queue_db(queue_db_path: Path, limit: int | None = None) -> list[str]:
-    conn = sqlite3.connect(queue_db_path)
+    tables = [r["name"] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+    ).fetchall()]
+    if "match_ids" not in tables:
+        raise RuntimeError(
+            "match_ids table not found in this DB. "
+            "You're connected to the wrong database file."
+        )
+
     rows = conn.execute(
         "SELECT match_id FROM match_ids ORDER BY added_at ASC"
         + (" LIMIT ?" if limit is not None else ""),
         (() if limit is None else (limit,))
     ).fetchall()
-    conn.close()
-    return [r[0] for r in rows]
+    match_ids = [r["match_id"] for r in rows]
 
-def main(limit: int | None = None) -> None:
-    conn = connect()
-    init_db(conn)
-
-    ROOT = Path(__file__).resolve().parents[1]
-    QUEUE_DB = ROOT / "data" / "raw" / "riot_queue.sqlite"
-
-    match_ids = load_match_ids_from_queue_db(QUEUE_DB, limit=limit)
-    print(f"Loaded {len(match_ids)} match ids from {QUEUE_DB}")
+    print(f"Loaded {len(match_ids)} match ids from DB")
 
     if not match_ids:
-        print("No match ids found in queue database.")
+        print("No match ids found in database.")
         return
 
     inserted = 0
@@ -108,26 +123,29 @@ def main(limit: int | None = None) -> None:
             if match_exists(conn, match_id):
                 skipped += 1
                 continue
-                
-            cache_path = MATCH_CACHE_DIR / f"{match_id}.json"
-            match_json = cache_read(cache_path)
+
+            match_json = cache_get_db(conn, match_id)
             if match_json is None:
                 match_json = fetch_match(match_id)
-                cache_write(match_json, cache_path)
+                with conn:
+                    cache_put_db(conn, match_id, match_json)
 
             with conn:
                 insert_match(conn, match_id, match_json)
-            
+
             inserted += 1
 
             if q % 25 == 0:
-                print(f"[{q}/{len(match_ids)}] inserted = {inserted}, skipped = {skipped}, failed = {failed}")
-        
+                print(f"[{q}/{len(match_ids)}] inserted={inserted}, skipped={skipped}, failed={failed}")
+
+            if q % 50 == 0:
+                time.sleep(0.25)
+
         except Exception as e:
             failed += 1
             print(f"FAILED match_id={match_id}: {e}")
 
-    print(f"Process Finished: inserted = {inserted}, skipped = {skipped}, failed = {failed}")
+    print(f"Process Finished: inserted={inserted}, skipped={skipped}, failed={failed}")
 
 if __name__ == "__main__":
     main(limit=None)

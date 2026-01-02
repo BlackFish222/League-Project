@@ -1,15 +1,21 @@
 import sqlite3
+import json
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path("Data") / "riot.db"
+DEFAULT_DB_PATH = Path("Data") / "Raw" / "riot.db"
 
-def connect(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+
+def connect(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+    db_path = Path(db_path)  
     db_path.parent.mkdir(parents=True, exist_ok=True)
+
     conn = sqlite3.connect(db_path)
+    print("Connected DB:", db_path.resolve())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.execute("PRAGMA journal_mode = WAL;")
     return conn
+
 
 def init_db(conn: sqlite3.Connection, schema_path: Path = Path("src/schema.sql"))-> None:
     if schema_path.exists():
@@ -77,10 +83,13 @@ def init_db(conn: sqlite3.Connection, schema_path: Path = Path("src/schema.sql")
             p.match_id,
             m.game_creation AS game_creation,
             m.game_duration / 60.0 AS game_minutes,
-            p.gold_earned / (m.gameDuration / 60.0) AS gold_per_min,
             CASE 
-                WHEN m.gameDuration = 0 THEN 0.0
-                ELSE p.deaths / (m.gameDuration / 600.0)
+                WHEN m.game_duration = 0 THEN NULL
+                ELSE p.gold_earned / (m.game_duration / 60.0)
+            END AS gold_per_min,
+            CASE 
+                WHEN m.game_duration = 0 THEN NULL
+                ELSE p.deaths / (m.game_duration / 600.0)
             END AS deaths_per_10,
             p.kills,
             p.deaths,
@@ -91,8 +100,12 @@ def init_db(conn: sqlite3.Connection, schema_path: Path = Path("src/schema.sql")
             m.queue_id AS queue_id
         FROM participants p
         JOIN matches m ON p.match_id = m.match_id;
+                           
+        CREATE TABLE IF NOT EXISTS match_cache (
+        match_id TEXT PRIMARY KEY,
+        fetched_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+        json TEXT NOT NULL);
         """)
-        
 
 def match_exists(conn: sqlite3.Connection, match_id: str) -> bool:
     row = conn.execute("SELECT 1 FROM matches WHERE match_id = ? LIMIT 1", (match_id,)).fetchone()

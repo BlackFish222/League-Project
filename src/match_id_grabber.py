@@ -4,7 +4,7 @@ import time
 import requests
 from Config import api_key
 
-DB_PATH = os.path.join("Data", "Raw", "riot_queue.sqlite")
+DB_PATH = "Data/Raw/riot.db"
 HEADERS = {"X-Riot-Token": api_key}
 REGION = "americas"
 
