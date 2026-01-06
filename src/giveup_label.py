@@ -9,15 +9,15 @@ from days_since_patch import ms_since_patch, ms_since_post_patch, ms_since_pre_p
 from riot_api import fetch_json
 
 BASELINE_GAMES = 20
-BASELINE_GPM = float
-BASELINE_DPT = float
+BASELINE_GPM = 1.0
+BASELINE_DPT = 1.0
 
 DATABASE = "player_match_stats"
-PLAYER_CSV = "Data/Processed/player_performance.csv"
+PLAYER_CSV = Path("Data/Processed/player_performance.csv")
 
 def load_games(conn) -> pd.DataFrame:
-    patch_start = ms_since_patch
-    patch_end = ms_since_post_patch
+    patch_start = ms_since_patch()
+    patch_end = ms_since_post_patch()
 
     query = f"""SELECT puuid, game_creation, gold_per_min, deaths_per_10 FROM {DATABASE} WHERE game_creation >= ? AND game_creation < ?"""
     df = pd.read_sql_query(query, conn, params=(patch_start, patch_end))
@@ -36,7 +36,7 @@ def label_player_games(group: pd.DataFrame) -> pd.DataFrame:
 
     gpm_mean = baseline["gold_per_min"].mean()
     gpm_std = baseline["gold_per_min"].std(ddof=0)
-    dpt_mean = baseline["deaths_per_10"].mean
+    dpt_mean = baseline["deaths_per_10"].mean()
     dpt_std = baseline["deaths_per_10"].std(ddof=0)
 
     if gpm_std == 0 or np.isnan(gpm_std):
@@ -47,9 +47,10 @@ def label_player_games(group: pd.DataFrame) -> pd.DataFrame:
     rest["z_gpm"] = (rest["gold_per_min"] - gpm_mean) / gpm_std
     rest["z_dpt"] = (rest["deaths_per_10"] - dpt_mean) / dpt_std
 
-    rest["give_up_game"] = (rest["z_gpm"] <= -BASELINE_GPM) & (rest["z_dpt"] >= BASELINE_DPT).astype(int)
+    cond = (rest["z_gpm"] <= -BASELINE_GPM) & (rest["z_dpt"] >= BASELINE_DPT)
+    rest["give_up_games"] = cond.astype(int)
 
-    baseline["give_up_game"] = 0
+    baseline["give_up_games"] = 0
 
     labeled = pd.concat([baseline, rest], ignore_index=True)
     return labeled
@@ -57,7 +58,7 @@ def label_player_games(group: pd.DataFrame) -> pd.DataFrame:
 def compute_player_labels(games: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     labeled_games = (
         games.groupby("puuid", group_keys=False)
-        .apply(label_player_games)
+        .apply(label_player_games, include_groups=False)
         .reset_index(drop=True)
     )
     agg = (
@@ -131,7 +132,7 @@ def update_player_performance(player_labels: pd.DataFrame) -> None:
     merged = features.merge(player_labels, on="puuid", how="left")
     merged["total_games"] = merged["total_games"].fillna(0).astype(int)
     merged["give_up_count"] = merged["give_up_count"].fillna(0).astype(int)
-    merged["gave_up"] = merged["gave_up"].fillna(0).astype(int)
+    merged["give_up"] = merged["give_up"].fillna(0).astype(int)
     merged["player_give_up_rate"] = merged["player_give_up_rate"].fillna(0.0)
 
     merged = attach_level(merged)
@@ -143,7 +144,7 @@ def main():
     conn = connect()
     games = load_games(conn)
 
-    player_labels = compute_player_labels(games)
+    labeled_games, player_labels = compute_player_labels(games)
     update_player_performance(player_labels)
 
 if __name__ == "__main__":

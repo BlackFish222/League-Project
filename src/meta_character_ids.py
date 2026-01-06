@@ -8,7 +8,7 @@ import requests
 
 META_CSV = Path("Data/Processed/meta_champs.csv")
 CACHE_DIR = Path("Data/Cache")
-DDRAGON_CHAMP_JSON = CACHE_DIR / "ddragon_champion_full.json"
+DDRAGON_CHAMP_JSON = Path(CACHE_DIR) / "ddragon_champion_full.json"
 
 DDRAGON_VERSION = "latest"
 
@@ -41,10 +41,6 @@ def build_name_to_id_map() -> Dict[str, int]:
     for champ_key, champ_obj in champs.items():
         champ_id = int(champ_obj["key"])
 
-        # DDragon variants:
-        # champ_key is like "Aatrox"
-        # champ_obj["id"] is like "Aatrox"
-        # champ_obj["name"] is like "Aatrox"
         name_to_id[champ_key] = champ_id
         name_to_id[champ_obj["id"]] = champ_id
         name_to_id[champ_obj["name"]] = champ_id
@@ -82,7 +78,6 @@ def meta_ids(meta_csv_path: Path = META_CSV) -> set[int]:
     ids, _, missing = load_meta_champ_ids(meta_csv_path)
     if missing:
         print(f"[meta_character_ids] WARNING: {len(missing)} champ names missing from DDragon mapping.")
-        # print(missing[:20])  # uncomment if you want samples
     return ids
 
 if __name__ == "__main__":
